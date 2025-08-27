@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import { apiService } from '../services/api';
+import { Notification } from '../types';
 import { 
   FileText, 
   CheckCircle, 
@@ -13,15 +16,83 @@ import {
   Filter,
   BarChart3,
   PieChart,
-  AlertTriangle
+  AlertTriangle,
+  Bell,
+  BellOff,
+  Trash2,
+  CheckCheck,
+  Eye
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
 
 const Dashboard: React.FC = () => {
   const { state } = useApp();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [filterScadenza, setFilterScadenza] = useState('7days');
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
 
+  // Carica notifiche
+  React.useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!user) return;
+      
+      setLoadingNotifications(true);
+      try {
+        const data = await apiService.getNotifications(true); // Include anche quelle lette
+        setNotifications(data);
+      } catch (error) {
+        console.error('Errore nel caricamento notifiche:', error);
+      } finally {
+        setLoadingNotifications(false);
+      }
+    };
+
+    fetchNotifications();
+  }, [user]);
+
+  const handleMarkAsRead = async (notificationId: number) => {
+    try {
+      await apiService.markNotificationAsRead(notificationId);
+      setNotifications(prev => 
+        prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)
+      );
+    } catch (error) {
+      console.error('Errore nel marcare notifica come letta:', error);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await apiService.markAllNotificationsAsRead();
+      setNotifications(prev => 
+        prev.map(n => ({ ...n, isRead: true }))
+      );
+    } catch (error) {
+      console.error('Errore nel marcare tutte le notifiche come lette:', error);
+    }
+  };
+
+  const handleDeleteNotification = async (notificationId: number) => {
+    try {
+      await apiService.deleteNotification(notificationId);
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    } catch (error) {
+      console.error('Errore nell\'eliminazione notifica:', error);
+    }
+  };
+
+  const formatNotificationDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    
+    if (diffInHours < 1) return 'Ora';
+    if (diffInHours < 24) return `${diffInHours}h fa`;
+    if (diffInHours < 48) return 'Ieri';
+    return date.toLocaleDateString('it-IT');
+  };
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('it-IT', {
       day: '2-digit',
@@ -327,22 +398,97 @@ const handleCardClick = (filter: string) => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Task per Software */}
+        {/* Notifiche */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Task per Software</h3>
-            <BarChart3 className="h-5 w-5 text-gray-400" />
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+              <Bell className="h-5 w-5 mr-2 text-blue-600" />
+              Le tue Notifiche ({notifications.filter(n => !n.isRead).length})
+            </h3>
+            <div className="flex space-x-2">
+              {notifications.some(n => !n.isRead) && (
+                <button
+                  onClick={handleMarkAllAsRead}
+                  disabled={loadingNotifications}
+                  className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                >
+                  <CheckCheck className="h-4 w-4 mr-1" />
+                  Segna tutte
+                </button>
+              )}
+            </div>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={softwareTaskStats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="nome" angle={-45} textAnchor="end" height={80} />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="taskTotali" fill="#3B82F6" />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-64 overflow-y-auto">
+            {loadingNotifications ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : notifications.length > 0 ? (
+              <div className="space-y-3">
+                {notifications.slice(0, 10).map((notification) => (
+                  <div 
+                    key={notification.id} 
+                    className={`p-3 rounded-lg border transition-colors ${
+                      notification.isRead 
+                        ? 'bg-gray-50 border-gray-200' 
+                        : 'bg-blue-50 border-blue-200'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-1">
+                          {!notification.isRead && (
+                            <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0"></div>
+                          )}
+                          <h4 className="text-sm font-medium text-gray-900 truncate">
+                            {notification.title}
+                          </h4>
+                        </div>
+                        <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                          {notification.message}
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-500">
+                            {formatNotificationDate(notification.createdAt)}
+                          </span>
+                          {notification.codiceTask && (
+                            <button
+                              onClick={() => navigate(`/task/${notification.taskId}`)}
+                              className="text-xs text-blue-600 hover:text-blue-800"
+                            >
+                              {notification.codiceTask}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex space-x-1 ml-2">
+                        {!notification.isRead && (
+                          <button
+                            onClick={() => handleMarkAsRead(notification.id)}
+                            className="p-1 text-blue-600 hover:text-blue-800"
+                            title="Segna come letta"
+                          >
+                            <Eye className="h-3 w-3" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteNotification(notification.id)}
+                          className="p-1 text-red-600 hover:text-red-800"
+                          title="Elimina notifica"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                <BellOff className="h-8 w-8 mb-2" />
+                <p className="text-sm">Nessuna notifica</p>
+              </div>
+            )}
           </div>
         </div>
 

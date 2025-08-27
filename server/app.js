@@ -14,6 +14,7 @@ const allegatiRoutes = require('./routes/allegati');
 const authRoutes = require('./routes/auth');
 const usersRouter = require('./routes/users');
 const taskLogsRoutes = require('./routes/taskLogs');
+const notificationsRoutes = require('./routes/notifications');
 
 
 
@@ -33,6 +34,7 @@ app.use('/api/allegati', allegatiRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRouter);
 app.use('/api/task-logs', taskLogsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 app.get('/api/test-clienti', async (req, res) => {
   try {

@@ -75,3 +75,18 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   canModifyTask: (task: Task) => boolean;
 }
+
+export interface Notification {
+  id: number;
+  userId: number;
+  taskId?: number;
+  type: 'task_assigned' | 'task_updated' | 'task_completed' | 'task_overdue';
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  createdBy?: number;
+  codiceTask?: string;
+  taskDescrizione?: string;
+  createdByName?: string;
+}

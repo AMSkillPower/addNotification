@@ -14,6 +14,7 @@ class ApiService {
       headers: {
         "Content-Type": "application/json",
         "x-username": currentUser?.username || "Unknown", // 👈 aggiunto
+        "x-user-id": currentUser?.id?.toString() || "", // 👈 aggiunto per notifiche
         ...options.headers,
       },
       ...options,
@@ -175,6 +176,33 @@ class ApiService {
 
   async getTaskLogsByUser(utente: string): Promise<import("../types").TaskLog[]> {
     return this.request<import("../types").TaskLog[]>(`/task-logs/user/${utente}`);
+  }
+
+  // Notifications API
+  async getNotifications(includeRead = false): Promise<import("../types").Notification[]> {
+    return this.request<import("../types").Notification[]>(`/notifications?includeRead=${includeRead}`);
+  }
+
+  async getUnreadNotificationsCount(): Promise<{ count: number }> {
+    return this.request<{ count: number }>('/notifications/count');
+  }
+
+  async markNotificationAsRead(id: number): Promise<void> {
+    return this.request<void>(`/notifications/${id}/read`, {
+      method: 'PUT',
+    });
+  }
+
+  async markAllNotificationsAsRead(): Promise<void> {
+    return this.request<void>('/notifications/read-all', {
+      method: 'PUT',
+    });
+  }
+
+  async deleteNotification(id: number): Promise<void> {
+    return this.request<void>(`/notifications/${id}`, {
+      method: 'DELETE',
+    });
   }
 }
 

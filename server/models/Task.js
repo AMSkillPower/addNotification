@@ -80,13 +80,28 @@ class Task {
                 @software, @utente, @clienti, @priorità, @commenti, @createdBy)
       `);
       
+    const createdTask = result.recordset[0];
+    
+    // Crea notifica se il task è assegnato a un utente diverso dal creatore
+    if (taskData.utente && createdByUserId) {
+      const assignedUserId = await this.getUserIdByUsername(taskData.utente);
+      if (assignedUserId && assignedUserId !== createdByUserId) {
+        const Notification = require('./Notification');
+        await Notification.createTaskAssignmentNotification(
+          createdTask, 
+          assignedUserId, 
+          createdByUserId
+        );
+      }
+    }
+    
     await this.createLog({
       utente: taskData.createdByUsername || 'Unknown', // 👈 Fallback se null/undefined
       codiceTask: taskData.codiceTask,
       eventLog: `Task creato: ${taskData.descrizione}`
     });
     
-    return result.recordset[0];
+    return createdTask;
   } catch (error) {
     throw new Error(`Errore nella creazione del task: ${error.message}`);
   }
@@ -99,6 +114,8 @@ class Task {
       .input('id', sql.Int, id)
       .query('SELECT * FROM Task WHERE id = @id');
 
+    const oldTask = oldResult.recordset[0];
+    
     await pool.request()
       .input('id', sql.Int, id)
       .input('descrizione', sql.NVarChar(255), taskData.descrizione)
@@ -122,34 +139,61 @@ class Task {
     const getResult = await pool.request()
       .input('id', sql.Int, id)
       .query('SELECT * FROM Task WHERE id = @id');
+    
+    const updatedTask = getResult.recordset[0];
+    
+    // Crea notifica se l'utente assegnato è cambiato
+    if (oldTask.utente !== updatedTask.utente && updatedTask.utente) {
+      const updatedByUserId = await this.getUserIdByUsername(operatore);
+      const assignedUserId = await this.getUserIdByUsername(updatedTask.utente);
+      
+      if (assignedUserId && updatedByUserId && assignedUserId !== updatedByUserId) {
+        const Notification = require('./Notification');
+        await Notification.createTaskAssignmentNotification(
+          updatedTask, 
+          assignedUserId, 
+          updatedByUserId
+        );
+      }
+    }
+    
+    // Crea notifica di aggiornamento per il creatore del task (se diverso da chi aggiorna)
+    if (updatedTask.createdBy) {
+      const updatedByUserId = await this.getUserIdByUsername(operatore);
+      if (updatedByUserId && updatedTask.createdBy !== updatedByUserId) {
+        const Notification = require('./Notification');
+        await Notification.createTaskUpdateNotification(updatedTask, updatedByUserId);
+      }
+    }
+    
     var log = `Task aggiornato\n`;
         if (
-          oldResult.recordset[0].descrizione !=
-          getResult.recordset[0].descrizione
+          oldTask.descrizione !=
+          updatedTask.descrizione
         ) {
-          log += `Descrizione: ${oldResult.recordset[0].descrizione} -> ${getResult.recordset[0].descrizione}\n`;
+          log += `Descrizione: ${oldTask.descrizione} -> ${updatedTask.descrizione}\n`;
         }
         if (
-          oldResult.recordset[0].dataScadenza.toString() !=
-          getResult.recordset[0].dataScadenza.toString()
+          oldTask.dataScadenza.toString() !=
+          updatedTask.dataScadenza.toString()
         ) {
-          log += `Data scadenza: ${oldResult.recordset[0].dataScadenza} -> ${getResult.recordset[0].dataScadenza}\n`;
+          log += `Data scadenza: ${oldTask.dataScadenza} -> ${updatedTask.dataScadenza}\n`;
         }
-        if (oldResult.recordset[0].stato != getResult.recordset[0].stato) {
-          log += `Stato: ${oldResult.recordset[0].stato} -> ${getResult.recordset[0].stato}\n`;
+        if (oldTask.stato != updatedTask.stato) {
+          log += `Stato: ${oldTask.stato} -> ${updatedTask.stato}\n`;
         }
-        if (oldResult.recordset[0].utente != getResult.recordset[0].utente) {
-          log += `Utente: ${oldResult.recordset[0].utente} -> ${getResult.recordset[0].utente}\n`;
+        if (oldTask.utente != updatedTask.utente) {
+          log += `Utente: ${oldTask.utente} -> ${updatedTask.utente}\n`;
         }
         if (
-          oldResult.recordset[0].priorita != getResult.recordset[0].priorita
+          oldTask.priorita != updatedTask.priorita
         ) {
-          log += `Priorita: ${oldResult.recordset[0].priorita} -> ${getResult.recordset[0].priorita}\n`;
+          log += `Priorita: ${oldTask.priorita} -> ${updatedTask.priorita}\n`;
         }
         if (
-          oldResult.recordset[0].commenti != getResult.recordset[0].commenti
+          oldTask.commenti != updatedTask.commenti
         ) {
-          log += `Commenti: ${oldResult.recordset[0].commenti} -> ${getResult.recordset[0].commenti}\n`;
+          log += `Commenti: ${oldTask.commenti} -> ${updatedTask.commenti}\n`;
         }
 
     await this.createLog({
@@ -158,7 +202,7 @@ class Task {
       eventLog: log
     });
 
-    return getResult.recordset[0];
+    return updatedTask;
   } catch (error) {
     throw new Error(`Errore nell'aggiornamento del task: ${error.message}`);
   }

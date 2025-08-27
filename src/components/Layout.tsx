@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { apiService } from '../services/api';
 import { 
   Home, 
   Users, 
@@ -10,7 +11,8 @@ import {
   LogOut,
   User as UserIcon,
   LayoutList,
-  FolderCode
+  FolderCode,
+  Bell
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -25,6 +27,27 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, onPageChange }) 
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Carica conteggio notifiche non lette
+  React.useEffect(() => {
+    const fetchUnreadCount = async () => {
+      if (!user) return;
+      
+      try {
+        const { count } = await apiService.getUnreadNotificationsCount();
+        setUnreadCount(count);
+      } catch (error) {
+        console.error('Errore nel caricamento conteggio notifiche:', error);
+      }
+    };
+
+    fetchUnreadCount();
+    
+    // Aggiorna ogni 30 secondi
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const menuItems = [
     { id: 'dashboard', icon: Home, label: 'Dashboard', count: null },
@@ -95,6 +118,14 @@ const handlePageChange = (page: string) => {
                 <p className="text-sm font-medium text-gray-900 truncate">{user?.fullName}</p>
                 <p className="text-xs text-gray-500">{user?.role}</p>
               </div>
+              {unreadCount > 0 && (
+                <div className="relative">
+                  <Bell className="h-4 w-4 text-blue-600" />
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
